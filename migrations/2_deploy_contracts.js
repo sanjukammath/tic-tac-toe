@@ -1,6 +1,6 @@
-var TicTacToe = artifacts.require("TicTacToe");
+const GameManager = artifacts.require("GameManager");
 
 module.exports = function(deployer) {
-  deployer.deploy(TicTacToe);
+  deployer.deploy(GameManager);
   // Additional contracts can be deployed here
 };

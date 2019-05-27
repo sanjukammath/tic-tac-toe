@@ -3,9 +3,9 @@ pragma solidity ^0.5.0;
 contract GameManager {
     address[] public deployedGames;
     
-    function createGame(address payable initiator, uint i, uint j) public payable{
+    function createGame(uint i, uint j) public payable{
         require(msg.value>100);
-        TicTacToe newGame = (new TicTacToe).value(msg.value)(initiator, i, j);
+        TicTacToe newGame = (new TicTacToe).value(msg.value)(msg.sender, i, j);
         
         deployedGames.push(address(newGame));
     }
