@@ -2,12 +2,13 @@ pragma solidity ^0.5.0;
 
 contract GameManager {
     address[] public deployedGames;
+    address public lastGame;
     
     function createGame(uint i, uint j) public payable{
-        require(msg.value>100);
+        require(msg.value>.001 ether);
         TicTacToe newGame = (new TicTacToe).value(msg.value)(msg.sender, i, j);
-        
-        deployedGames.push(address(newGame));
+        lastGame = address(newGame);
+        deployedGames.push(lastGame);
     }
     
     function getDeployedGames() public view returns (address[] memory) {
@@ -28,6 +29,7 @@ contract TicTacToe {
     mapping(address => uint) public refunds;
     
     constructor (address payable initiator, uint i, uint j) public payable{
+        require(msg.value>.001 ether);
         X = initiator;
         board[i][j] = 1;
         bounty = msg.value;
