@@ -1,6 +1,7 @@
 pragma solidity ^0.5.0;
 
 contract GameManager {
+
     address[] public deployedGames;
     address public lastGame;
     
@@ -17,12 +18,14 @@ contract GameManager {
 }
 
 contract TicTacToe {
+    event Joined (address responder);
+    event Played (address player);
+    event Over (string result);
     address payable public X;
     address payable public O;
     uint8[3][3] public board;
     address payable public lastTurn;
     address payable public winner;
-    //1 initated, 2 active,3 completed
     uint8 public stage;
     uint public bounty;
     uint public numberOfTurns;
@@ -51,6 +54,7 @@ contract TicTacToe {
         stage=2;
         lastTurn=O;
         numberOfTurns++;
+        emit Joined(O);
     }
     
     function play(uint i, uint j) public{
@@ -73,15 +77,16 @@ contract TicTacToe {
         if (won) {
             refunds[winner] = bounty;
             stage = 3;
+            emit Over("Won");
         } else if (numberOfTurns == 9) {
-            uint refund = bounty/2;
-            refunds[X] = refund;
-            refunds[O] = address(this).balance - refund;
+            uint drawRefund = bounty/2;
+            refunds[X] = drawRefund;
+            refunds[O] = address(this).balance - drawRefund;
             stage = 3;
+            emit Over("Draw");
+        } else {
+            emit Played(msg.sender);
         }
-        
-        
-        
     }
     
     function checkWinner(uint i, uint j, address payable player) private returns (bool){
@@ -131,10 +136,10 @@ contract TicTacToe {
     }
     
     function claimRefund() public {
-        uint refund = refunds[msg.sender];
-        require(refund > 0);
+        uint senderRefund = refunds[msg.sender];
+        require(senderRefund > 0);
         refunds[msg.sender]=0;
-        msg.sender.transfer(refund);
+        msg.sender.transfer(senderRefund);
     }
 
     function getDetails() public view returns(
