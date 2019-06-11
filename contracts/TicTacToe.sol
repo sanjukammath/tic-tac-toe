@@ -1,138 +1,156 @@
 pragma solidity ^0.5.0;
 
-contract GameManager {
-
-    address[] public deployedGames;
-    address public lastGame;
-    
-    function createGame(uint i, uint j) public payable{
-        require(msg.value>.001 ether);
-        TicTacToe newGame = (new TicTacToe).value(msg.value)(msg.sender, i, j);
-        lastGame = address(newGame);
-        deployedGames.push(lastGame);
-    }
-    
-    function getDeployedGames() public view returns (address[] memory) {
-        return deployedGames;
-    }
-}
-
 contract TicTacToe {
-    event Joined (address responder);
-    event Played (address player);
-    event Over (string result);
-    address payable public X;
-    address payable public O;
-    uint8[3][3] public board;
-    address payable public lastTurn;
-    address payable public winner;
-    uint8 public stage;
-    uint public bounty;
-    uint public numberOfTurns;
+    event Joined (uint id, address responder);
+    event Played (uint id, address player);
+    event Over (uint id, string result);
+    
+    enum Stages { Created, Joined, Over }
+    
+    struct Game{
+        address payable X;
+        address payable O;
+        mapping(uint8 => mapping(uint8 => uint8)) board;
+        address lastTurn;
+        Stages stage;
+        uint bounty;
+        uint8 numberOfTurns;
+        bool result;
+    }
+    
     mapping(address => uint) public refunds;
+    mapping(uint => Game) public games;
     
-    constructor (address payable initiator, uint i, uint j) public payable{
-        require(msg.value>.001 ether);
-        X = initiator;
-        board[i][j] = 1;
-        bounty = msg.value;
-        stage = 1;
-        lastTurn = X;
-        numberOfTurns = 1;
-    }
-    
-    function join(uint i, uint j) public payable{
-        require(msg.value >= bounty);
-        require(msg.sender != X);
-        require(stage==1);
+    uint public numberOfGames;
 
-        require(board[i][j] == 0);
-        
-        board[i][j] = 2;
-        O = msg.sender;
-        bounty += msg.value;
-        stage=2;
-        lastTurn=O;
-        numberOfTurns++;
-        emit Joined(O);
+    constructor () public{
+        numberOfGames = 0;
     }
     
-    function play(uint i, uint j) public{
-        require(stage==2);
-        require(board[i][j] == 0);
+    function createGame (uint8 row, uint8 col) public payable {
+        require(msg.value>.001 ether, "Add minimum stake value");
+        require(row < 3 && col < 3, "index out of bound");
         
-        if (lastTurn == X) {
-            require(msg.sender == O);
-            board[i][j] = 2;
-            lastTurn=O;
-        } else {
-            require(msg.sender == X);
-            board[i][j] = 1;
-            lastTurn=X;
-        }
+        Game memory newGame = Game({
+           X: msg.sender,
+           O: address(0),
+           lastTurn: msg.sender,
+           stage: Stages.Created,
+           bounty: msg.value,
+           numberOfTurns: 1,
+           result: false
+        });
         
-        numberOfTurns++;
-        
-        bool won = checkWinner(i, j, lastTurn);
-        if (won) {
-            refunds[winner] = bounty;
-            stage = 3;
-            emit Over("Won");
-        } else if (numberOfTurns == 9) {
-            uint drawRefund = bounty/2;
-            refunds[X] = drawRefund;
-            refunds[O] = address(this).balance - drawRefund;
-            stage = 3;
-            emit Over("Draw");
-        } else {
-            emit Played(msg.sender);
-        }
+        games[numberOfGames] = newGame;
+        Game storage currentGame = games[numberOfGames];
+        numberOfGames++;
+        currentGame.board[row][col] = 1;
+
     }
     
-    function checkWinner(uint i, uint j, address payable player) private returns (bool){
-        uint8 c = board[i][j];
+    function join(uint g, uint8 row, uint8 col) public payable{
+        require(g < numberOfGames, "Game not yet created");
         
-        for(uint x = 0; x < 3; x++){
-            if(board[x][j] != c)
+        Game storage currentGame = games[g];
+        
+        require(msg.value >= currentGame.bounty, "Match the stake");
+        require(msg.sender != currentGame.X, "Playing with self");
+        require(currentGame.stage==Stages.Created, "Stage is not Created");
+        require(currentGame.board[row][col] == 0);
+        
+        currentGame.O = msg.sender;
+        currentGame.board[row][col] = 2;
+        currentGame.bounty+= msg.value;
+        currentGame.stage = Stages.Joined;
+        currentGame.lastTurn = msg.sender;
+        currentGame.numberOfTurns++;
+        emit Joined(g, msg.sender);
+    }
+    
+    function play(uint g, uint8 row, uint8 col) public{
+        require(g < numberOfGames, "Game not yet created");
+        
+        Game storage currentGame = games[g];
+        
+        require(currentGame.stage==Stages.Joined, "Stage is not Joined");
+        require(currentGame.board[row][col] == 0);
+        
+        if (currentGame.lastTurn == currentGame.X) {
+            require(msg.sender == currentGame.O, "This is O's turn");
+            currentGame.board[row][col] = 2;
+        } else {
+            require(msg.sender == currentGame.X, "This is X's turn");
+            currentGame.board[row][col] = 1;
+        }
+        
+        
+        currentGame.lastTurn = msg.sender;
+        currentGame.numberOfTurns++;
+        
+        if (currentGame.numberOfTurns > 4) {
+            bool won = checkWinner(currentGame, row, col);
+            if (won) {
+                refunds[msg.sender] += currentGame.bounty;
+                currentGame.stage = Stages.Over;
+                currentGame.result = true;
+                emit Over(g, "Won");
+            } else if (currentGame.numberOfTurns == 9) {
+                uint drawRefund = currentGame.bounty/2;
+                refunds[currentGame.X] += drawRefund;
+                refunds[currentGame.O] += currentGame.bounty - drawRefund;
+                currentGame.stage = Stages.Over;
+                emit Over(g, "Draw");
+            } else {
+                emit Played(g, msg.sender);
+            }
+        }
+        emit Played(g, msg.sender);
+    }
+    
+    
+    function checkWinner(Game storage currentGame, uint8 row, uint8 col) private view returns (bool won){
+        
+        uint8 c = currentGame.board[row][col];
+        
+        for(uint8 x = 0; x < 3; x++){
+            if(currentGame.board[x][col] != c)
                 break;
             if(x == 2){
-                winner = player;
                 return true;
             }
         }
         
-        for(uint y = 0; y < 3; y++){
-            if(board[i][y] != c)
+        for(uint8 y = 0; y < 3; y++){
+            if(currentGame.board[row][y] != c)
                 break;
             if(y == 2){
-                winner = player;
                 return true;
             }
         }
         
-        if (i != j){
-            if (i+j != 2) {
+        if (row != col){
+            if (row + col != 2) {
                 return false;
             }
-            for(uint x = 0; x < 3; x++){
-                if(board[x][(2)-x] != c)
+            for(uint8 x = 0; x < 3; x++){
+                if(currentGame.board[x][(2)-x] != c)
                     break;
                 if(x == 2){
-                    winner = player;
                     return true;
                 }
             }
             
         } else {
-            for(uint x = 0; x < 3; x++){
-                if(board[x][x] != c)
+            for(uint8 x = 0; x < 3; x++){
+                if(currentGame.board[x][x] != c)
                     break;
                 if(x == 2){
-                    winner = player;
                     return true;
                 }
             }
         }
+        
+        return false;
     }
     
     function claimRefund() public {
@@ -141,21 +159,17 @@ contract TicTacToe {
         refunds[msg.sender]=0;
         msg.sender.transfer(senderRefund);
     }
-
-    function getDetails() public view returns(
-        address, address, uint8[3][3] memory, address, uint8, address, uint, uint 
-    ) {
-        return (
-            X,
-            O,
-            board,
-            lastTurn,
-            stage,
-            winner,
-            bounty,
-            numberOfTurns
-        );
-
-    }
     
+    function getBoard(uint g) public view returns (uint8[9] memory board) {
+        Game storage currentGame = games[g];
+        uint8 x = 0;
+
+        for (uint8 i = 0; i < 3; i++){
+            for (uint8 j = 0; j < 3; j++) {
+                board[x] = currentGame.board[i][j];
+                x++;
+            }
+        }
+        return board;
+    }
 }
