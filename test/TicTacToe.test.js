@@ -1,4 +1,5 @@
 const TicTacToe = artifacts.require("TicTacToe");
+const TGToken = artifacts.require("TGToken");
 
 const value = web3.utils.toWei(".002", "ether");
 
@@ -111,11 +112,13 @@ contract("TicTacToe declares winner correctly", accounts => {
   let numberOfGames;
   let index;
   let initialWinnerRefund;
+  let token;
   beforeEach("setup a TicTacToe contract", async () => {
     game = await TicTacToe.deployed();
+    token = await TGToken.deployed();
     const X = accounts[1];
     const O = accounts[2];
-    initialWinnerRefund = await game.refunds(X);
+    initialWinnerRefund = await game.tokenBalance(X);
 
     await game.createGame(1, 1, { from: X, value: value });
 
@@ -130,7 +133,7 @@ contract("TicTacToe declares winner correctly", accounts => {
 
   it("records the winner correctly", async () => {
     const { X, lastTurn, stage, result, bounty } = await game.games(index);
-    const winnerRefund = await game.refunds(X);
+    const winnerRefund = await game.tokenBalance(X);
 
     assert.strictEqual(X, lastTurn);
     assert.strictEqual(
@@ -150,7 +153,7 @@ contract("TicTacToe declares winner correctly", accounts => {
   });
   it("doesn't let the looser pull money", async () => {
     try {
-      await game.claimRefund({ from: O });
+      await game.claimTokens({ from: O });
       assert(false);
     } catch {
       assert(true);
@@ -158,9 +161,15 @@ contract("TicTacToe declares winner correctly", accounts => {
   });
   it("lets the winner pull money", async () => {
     const X = accounts[1];
+    await game.claimTokens({ from: X });
+    const tokenBalance = await token.balanceOf(X);
+
     const initialBalance = await web3.eth.getBalance(X);
+
+    await token.increaseAllowance(game.address, tokenBalance, { from: X });
     await game.claimRefund({ from: X });
     const finalBalance = await web3.eth.getBalance(X);
+
     assert(finalBalance > initialBalance);
   });
 });
@@ -170,13 +179,16 @@ contract("TicTacToe handles a draw correctly", accounts => {
   let numberOfGames;
   let index;
   let initialXRefund;
-  let initialYRefund;
+  let initialORefund;
+  let token;
+
   beforeEach("setup a TicTacToe contract", async () => {
     game = await TicTacToe.deployed();
+    token = await TGToken.deployed();
     const X = accounts[1];
     const O = accounts[2];
-    initialXRefund = await game.refunds(X);
-    initialORefund = await game.refunds(O);
+    initialXRefund = await game.tokenBalance(X);
+    initialORefund = await game.tokenBalance(O);
 
     await game.createGame(1, 1, { from: X, value: value });
 
@@ -195,8 +207,8 @@ contract("TicTacToe handles a draw correctly", accounts => {
 
   it("records the draw correctly", async () => {
     const { X, O, stage, result, bounty } = await game.games(index);
-    const XRefund = await game.refunds(X);
-    const ORefund = await game.refunds(O);
+    const XRefund = await game.tokenBalance(X);
+    const ORefund = await game.tokenBalance(O);
 
     const totalRefund =
       Number(XRefund) +
@@ -210,14 +222,22 @@ contract("TicTacToe handles a draw correctly", accounts => {
   });
   it("lets the initiator pull money", async () => {
     const X = accounts[1];
+    await game.claimTokens({ from: X });
+    const tokenBalance = await token.balanceOf(X);
+
     const initialBalance = await web3.eth.getBalance(X);
+    await token.increaseAllowance(game.address, tokenBalance, { from: X });
     await game.claimRefund({ from: X });
     const finalBalance = await web3.eth.getBalance(X);
     assert(finalBalance > initialBalance);
   });
   it("lets the responder pull money", async () => {
     const O = accounts[2];
+    await game.claimTokens({ from: O });
+    const tokenBalance = await token.balanceOf(O);
+
     const initialBalance = await web3.eth.getBalance(O);
+    await token.increaseAllowance(game.address, tokenBalance, { from: O });
     await game.claimRefund({ from: O });
     const finalBalance = await web3.eth.getBalance(O);
     assert(finalBalance > initialBalance);
