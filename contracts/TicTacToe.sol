@@ -1,5 +1,7 @@
 pragma solidity ^0.5.0;
 
+import "openzeppelin-solidity/contracts/token/ERC20/ERC20Mintable.sol";
+
 contract TicTacToe {
     event Joined (uint id, address responder);
     event Played (uint id, address player);
@@ -18,12 +20,14 @@ contract TicTacToe {
         bool result;
     }
     
-    mapping(address => uint) public refunds;
+    mapping(address => uint) public tokenBalance;
     mapping(uint => Game) public games;
     
+    address public tokenAddress;
     uint public numberOfGames;
 
-    constructor () public{
+    constructor (address a) public{
+        tokenAddress = a;
         numberOfGames = 0;
     }
     
@@ -90,21 +94,22 @@ contract TicTacToe {
         if (currentGame.numberOfTurns > 4) {
             bool won = checkWinner(currentGame, row, col);
             if (won) {
-                refunds[msg.sender] += currentGame.bounty;
+                tokenBalance[msg.sender] += currentGame.bounty;
                 currentGame.stage = Stages.Over;
                 currentGame.result = true;
                 emit Over(g, "Won");
             } else if (currentGame.numberOfTurns == 9) {
                 uint drawRefund = currentGame.bounty/2;
-                refunds[currentGame.X] += drawRefund;
-                refunds[currentGame.O] += currentGame.bounty - drawRefund;
+                tokenBalance[currentGame.X] += drawRefund;
+                tokenBalance[currentGame.O] += currentGame.bounty - drawRefund;
                 currentGame.stage = Stages.Over;
                 emit Over(g, "Draw");
             } else {
                 emit Played(g, msg.sender);
             }
-        }
-        emit Played(g, msg.sender);
+        }else {
+            emit Played(g, msg.sender);
+        }        
     }
     
     
@@ -153,11 +158,18 @@ contract TicTacToe {
         return false;
     }
     
+    function claimTokens() public {
+        uint senderRefund = tokenBalance[msg.sender];
+        require(senderRefund > 0, "You don't have tokens");
+        tokenBalance[msg.sender]=0;
+        ERC20Mintable(tokenAddress).mint(msg.sender, senderRefund);
+    }
+    
     function claimRefund() public {
-        uint senderRefund = refunds[msg.sender];
-        require(senderRefund > 0);
-        refunds[msg.sender]=0;
-        msg.sender.transfer(senderRefund);
+        uint tokens = ERC20Mintable(tokenAddress).allowance(msg.sender, address(this));
+        require(tokens > 0, "You have to allow the contract to spend on your behalf");
+        ERC20Mintable(tokenAddress).transferFrom(msg.sender, address(this), tokens);
+        msg.sender.transfer(tokens);
     }
     
     function getBoard(uint g) public view returns (uint8[9] memory board) {
