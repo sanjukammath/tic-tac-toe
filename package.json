@@ -10,13 +10,16 @@
     "test": "mocha",
     "coverage": "node_modules/.bin/solidity-coverage > result.txt"
   },
-  "author": "",
+  "author": "Sanjay S B",
+  "repository": "https://github.com/sanjukammath/tic-tac-toe.git",
   "license": "ISC",
   "dependencies": {
     "openzeppelin-solidity": "^2.3.0",
     "truffle-hdwallet-provider": "^1.0.9"
   },
   "devDependencies": {
+    "chai": "^4.2.0",
+    "openzeppelin-test-helpers": "^0.4.0",
     "solidity-coverage": "^0.6.0-beta.5"
   }
 }
