@@ -1,17 +1,17 @@
 pragma solidity ^0.5.0;
 
-import "https://github.com/OpenZeppelin/openzeppelin-solidity/contracts/math/SafeMath.sol";
+import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 
 contract ERC20Interface {
-    function totalSupply() public view returns (uint);
-    function balanceOf(address tokenOwner) public view returns (uint balance);
-    function allowance(address tokenOwner, address spender) public view returns (uint remaining);
-    function transfer(address to, uint tokens) public returns (bool success);
-    function approve(address spender, uint tokens) public returns (bool success);
-    function transferFrom(address from, address to, uint tokens) public returns (bool success);
+    function totalSupply() public view returns (uint256);
+    function balanceOf(address _owner) public view returns (uint256 balance);
+    function allowance(address _owner, address _spender) public view returns (uint256 remaining);
+    function transfer(address _to, uint256 _value) public returns (bool success);
+    function approve(address _spender, uint256 _value) public returns (bool success);
+    function transferFrom(address _from, address _to, uint256 _value) public returns (bool success);
 
-    event Transfer(address indexed from, address indexed to, uint tokens);
-    event Approval(address indexed tokenOwner, address indexed spender, uint tokens);
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
 contract TGToken is ERC20Interface {
@@ -19,7 +19,6 @@ contract TGToken is ERC20Interface {
     string public name = "TicTacToeGameToken";
     string public symbol = "TGT";
     uint8 public decimals = 2;
-    uint public initialSupply = 10000;
     address public contractOwner;
 
     mapping (address => uint256) private _balances;
@@ -28,14 +27,15 @@ contract TGToken is ERC20Interface {
 
     uint256 private _totalSupply;
     
-    constructor() public {
+    constructor(uint initialSupply) public {
         contractOwner = msg.sender;
         _balances[msg.sender] = initialSupply;
+        _totalSupply = initialSupply;
     }
     
     function requestTokens() public {
-        require(_balances[msg.sender] < 5, "Sender has enough tokens");
-        require(_balances[contractOwner] > 5, "All current tokens have been distributed");
+        require(_balances[msg.sender] < 5, "TGT: Requestor has enough tokens");
+        require(_balances[contractOwner] > 5, "TGT: All tokens in supply have been distributed");
         
         _balances[contractOwner] = _balances[contractOwner].sub(5);
         _balances[msg.sender] = _balances[msg.sender].add(5);
@@ -43,9 +43,10 @@ contract TGToken is ERC20Interface {
     }
     
     function mint(uint amount) public {
-        require (msg.sender == contractOwner, "Only token manager can mint");
+        require (msg.sender == contractOwner, "TGT: Only token manager can mint");
         _balances[contractOwner] = _balances[contractOwner].add(amount);
         _totalSupply = _totalSupply.add(amount);
+        emit Transfer(address(0), msg.sender, amount);
     }
 
     function totalSupply() public view returns (uint256) {

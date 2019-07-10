@@ -1,12 +1,12 @@
 const TGToken = artifacts.require("TGToken");
-const TicTacToe = artifacts.require("TicTacToe");
+// const TicTacToe = artifacts.require("TicTacToe");
 
 module.exports = async deployer => {
-  await deployer.deploy(TGToken);
-  await deployer.deploy(TicTacToe, TGToken.address);
+  await deployer.deploy(TGToken, 100);
+  // await deployer.deploy(TicTacToe, TGToken.address);
 
-  const tokenInstance = await TGToken.deployed();
+  // const tokenInstance = await TGToken.deployed();
 
-  await tokenInstance.addMinter(TicTacToe.address);
-  await tokenInstance.renounceMinter();
+  // await tokenInstance.addMinter(TicTacToe.address);
+  // await tokenInstance.renounceMinter();
 };

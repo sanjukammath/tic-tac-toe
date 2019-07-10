@@ -1,6 +1,6 @@
 pragma solidity ^0.5.0;
 
-import "https://github.com/OpenZeppelin/openzeppelin-solidity/contracts/math/SafeMath.sol";
+import "openzeppelin-solidity/contracts/math/SafeMath.sol";
 
 contract ERC20Interface {
     function totalSupply() public view returns (uint);
