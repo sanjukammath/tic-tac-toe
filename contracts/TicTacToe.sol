@@ -18,15 +18,15 @@ contract TicTacToe {
     using SafeMath for uint256;
     
     event Accepted (uint id, address responder);
-    event Started (uint id, address player);
+    event Started (uint id, uint8 row, uint8 col);
     event Saved (uint id, address player, int8[9] board);
     event Closed (uint id, string result, address winner);
     
     address public tokenAddress;
-    uint public numberOfGames;
+    uint256 public numberOfGames;
     mapping(address => uint) public refund;
     
-    enum BidStates {Created, Accepted, Started, Disbursed}
+    enum BidStates {Created, Accepted, Disbursed}
 
     struct Bid{
         address bidder;
@@ -61,7 +61,7 @@ contract TicTacToe {
 
     function bid (uint stake, uint timeOut) public {
         uint256 approvedTokens = ERC20Interface(tokenAddress).allowance(msg.sender, address(this));
-        require(stake < approvedTokens, "contract not allowed to spend stake amount");
+        require(stake <= approvedTokens, "contract not allowed to spend stake amount");
         require(ERC20Interface(tokenAddress).transferFrom(msg.sender, address(this), stake), "transfer of tokens failed");
         
         Bid memory newBid = Bid({
@@ -74,15 +74,17 @@ contract TicTacToe {
         });
         
         bids[numberOfGames] = newBid;
-        numberOfGames.add(1);
+        numberOfGames = numberOfGames.add(1);
     }
     
     function accept(uint id) public{
+        require(id < numberOfGames, "The bid is not yet created");
         Bid storage currentBid = bids[id];
         uint value = currentBid.value;
+        require(msg.sender != currentBid.bidder, "one cannot accept own bid");
         require(currentBid.state == BidStates.Created, "This bid is not available for accepting");
         uint256 approvedTokens = ERC20Interface(tokenAddress).allowance(msg.sender, address(this));
-        require(value < approvedTokens, "contract not allowed to spend stake amount");
+        require(value <= approvedTokens, "contract not allowed to spend stake amount");
         require(ERC20Interface(tokenAddress).transferFrom(msg.sender, address(this), value), "transfer of tokens failed");
         
         currentBid.acceptor = msg.sender;
@@ -93,17 +95,18 @@ contract TicTacToe {
     }
     
     function start(uint id, uint8 row, uint8 col) public{
-        Bid storage currentBid = bids[id];
+        require(id < numberOfGames, "Create a bid before starting the game!");
+        Bid memory currentBid = bids[id];
         require(currentBid.state == BidStates.Accepted, "wait for the bid to be acceted before starting a game");
         require(msg.sender == currentBid.bidder, "only the bidder can make the first move");
         require(row < 3 && col < 3, "index out of bound");
         
         uint8 turns = games[id].numberOfTurns;
-        require(turns == 0, "the game has already been started once");
+        require(turns == 0, "the game for this bid has already been started once");
         
         Game memory newGame = Game({
            X: msg.sender,
-           O: address(0),
+           O: currentBid.acceptor,
            state: GameStates.Started,
            bidId: id,
            numberOfTurns: 1, 
@@ -113,12 +116,12 @@ contract TicTacToe {
         Game storage currentGame = games[id];
         currentGame.board[row][col] = 1;
         
-        currentBid.state = BidStates.Started;
-        emit Started(id, msg.sender);
+        emit Started(id, row, col);
     }
     
     function save(uint id, int8[9] memory board,  uint8 v, bytes32 r, bytes32 s, uint8 nonce, bool close) public{
         Game storage currentGame = games[id];
+        require(currentGame.numberOfTurns >= 1, "Game should start before you can attempt to save");
         require(currentGame.state == GameStates.Started, "There is nothing to save");
         require(nonce < 10, "invalid nonce");
         require(currentGame.numberOfTurns < nonce, "Trying to save older state");
@@ -174,6 +177,7 @@ contract TicTacToe {
     function timeOut(uint id) public{
         Game storage currentGame = games[id];
         Bid storage currentBid = bids[id];
+        require(msg.sender != address(0));
         require(msg.sender == currentBid.bidder || msg.sender == currentBid.acceptor, "Not a player in this game");
         
         require(currentBid.state != BidStates.Disbursed, "Bid has already been paid out");
@@ -215,9 +219,9 @@ contract TicTacToe {
         return (currentBid.bidder, currentBid.acceptor, currentBid.value, currentBid.state, currentBid.bidTimeOut);
     }
     
-    function getGameDetails(uint id) public view returns(address, address, GameStates, uint8){
+    function getGameDetails(uint id) public view returns(address, address, GameStates, uint8, address){
         Game memory game = games[id];
-        return (game.X, game.O, game.state, game.numberOfTurns);
+        return (game.X, game.O, game.state, game.numberOfTurns, game.winner);
     }
     
     function getBoard(uint g) public view returns (int8[9] memory board) {
