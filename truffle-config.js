@@ -7,6 +7,7 @@ const mnemonicPath = path.resolve(__dirname, "mnemonic");
 const MNEMONIC = fs.readFileSync(mnemonicPath, "utf8");
 
 module.exports = {
+  contracts_build_directory: "./client/src/contracts",
   networks: {
     development: {
       provider: function() {

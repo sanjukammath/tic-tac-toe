@@ -18,7 +18,7 @@ contract TGToken is ERC20Interface {
     using SafeMath for uint256;
     string public name = "TicTacToeGameToken";
     string public symbol = "TGT";
-    uint8 public decimals = 2;
+    uint8 public decimals = 0;
     address public contractOwner;
 
     mapping (address => uint256) private _balances;
