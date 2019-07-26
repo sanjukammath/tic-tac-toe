@@ -29,6 +29,7 @@ contract TicTacToe {
     enum BidStates {Created, Accepted, Disbursed}
 
     struct Bid{
+        uint id;
         address bidder;
         uint value;
         address acceptor;
@@ -39,8 +40,9 @@ contract TicTacToe {
     
     mapping(uint => Bid) public bids;
     
-    enum GameStates {Started, Closed, Drew , Won}
+    uint256[] public openBids; 
     
+    enum GameStates {Started, Closed, Drew , Won}
     
     struct Game{
         address X;
@@ -65,6 +67,7 @@ contract TicTacToe {
         require(ERC20Interface(tokenAddress).transferFrom(msg.sender, address(this), stake), "transfer of tokens failed");
         
         Bid memory newBid = Bid({
+            id: numberOfGames,
             bidder: msg.sender,
             value: stake,
             acceptor: address(0),
@@ -74,6 +77,7 @@ contract TicTacToe {
         });
         
         bids[numberOfGames] = newBid;
+        openBids.push(numberOfGames);
         numberOfGames = numberOfGames.add(1);
     }
     
@@ -90,8 +94,19 @@ contract TicTacToe {
         currentBid.acceptor = msg.sender;
         currentBid.state = BidStates.Accepted;
         currentBid.value = value.add(value);
+        remove(id);
         
         emit Accepted(id, msg.sender);
+    }
+    
+    function remove(uint index)  private {
+        if (index >= openBids.length) return;
+
+        for (uint i = index; i<openBids.length-1; i++){
+            openBids[i] = openBids[i+1];
+        }
+        delete openBids[openBids.length-1];
+        openBids.length--;
     }
     
     function start(uint id, uint8 row, uint8 col) public{
@@ -261,6 +276,10 @@ contract TicTacToe {
         }
         
         return (false, address(0));
+    }
+
+    function getBidsCount() public view returns (uint) {
+        return openBids.length;
     }
     
 }
