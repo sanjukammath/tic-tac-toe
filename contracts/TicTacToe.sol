@@ -40,9 +40,11 @@ contract TicTacToe {
     
     mapping(uint => Bid) public bids;
     
-    uint256[] public openBids; 
+    uint256[] public openBids;
+
+    mapping(uint256 => uint256) public indexOf;
     
-    enum GameStates {Started, Closed, Drew , Won}
+    enum GameStates {Default, Started, Closed, Drew , Won}
     
     struct Game{
         address X;
@@ -77,6 +79,7 @@ contract TicTacToe {
         });
         
         bids[numberOfGames] = newBid;
+        indexOf[numberOfGames] = openBids.length;
         openBids.push(numberOfGames);
         numberOfGames = numberOfGames.add(1);
     }
@@ -99,11 +102,18 @@ contract TicTacToe {
         emit Accepted(id, msg.sender);
     }
     
-    function remove(uint index)  private {
+    function remove(uint element)  private {
+        uint index = indexOf[element];
+
+        if (openBids[index] != element) {
+            return;
+        }
+        
         if (index >= openBids.length) return;
 
         for (uint i = index; i<openBids.length-1; i++){
             openBids[i] = openBids[i+1];
+            indexOf[openBids[i]] = i;
         }
         delete openBids[openBids.length-1];
         openBids.length--;
@@ -170,7 +180,7 @@ contract TicTacToe {
                 currentBid.state = BidStates.Disbursed;
                 
                 ERC20Interface(tokenAddress).transfer(winner, currentBid.value);
-                
+                remove(id);
                 emit Closed(id, "Game Won", winner);
             } else if(currentGame.numberOfTurns == 9) {
                 currentGame.state = GameStates.Drew;
@@ -183,6 +193,7 @@ contract TicTacToe {
                 ERC20Interface(tokenAddress).transfer(currentGame.O, currentBid.value - drawRefund);
                 
                 emit Closed(id, "Game Draw", address(0));
+                remove(id);
             } else {
                 require(false, "Game cannot be closed without a result. If you want to just save send close as false");
             }
