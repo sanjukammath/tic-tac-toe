@@ -197,7 +197,7 @@ contract TicTacToe {
         
         require(currentBid.state != BidStates.Disbursed, "Bid has already been paid out");
         
-        require(currentBid.startDate + currentBid.bidTimeOut > now, "Bid timeOut has not occured yet");
+        require(currentBid.startDate + currentBid.bidTimeOut * 1 seconds < now, "Bid timeOut has not occured yet");
         
         BidStates state = currentBid.state;
         
@@ -213,7 +213,7 @@ contract TicTacToe {
             ERC20Interface(tokenAddress).transfer(currentBid.bidder, closedRefund);
             ERC20Interface(tokenAddress).transfer(currentBid.acceptor, currentBid.value - closedRefund);
         }
-        
+        remove(id);
     }
     
     function saveBoard(Game storage game, int8[9] memory board) private {

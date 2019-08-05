@@ -32,8 +32,7 @@ module.exports = {
           "https://rinkeby.infura.io/v3/221cb1c28ce24c269b98142f855c008e"
         );
       },
-      network_id: 4,
-      gas: 1000000
+      network_id: 4
     }
   },
   compilers: {
