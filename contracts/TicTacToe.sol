@@ -19,6 +19,7 @@ contract TicTacToe {
     
     event Accepted (uint id, address responder);
     event Started (uint id, uint8 row, uint8 col);
+    event Played (uint id, uint8 row, uint8 col);
     event Saved (uint id, address player, int8[9] board);
     event Closed (uint id, string result, address winner);
     
@@ -44,7 +45,7 @@ contract TicTacToe {
 
     mapping(uint256 => uint256) public indexOf;
     
-    enum GameStates {Default, Started, Closed, Drew , Won}
+    enum GameStates {Default, Started, Channelized, Closed, Drew , Won}
     
     struct Game{
         address X;
@@ -54,6 +55,8 @@ contract TicTacToe {
         uint bidId;
         uint8 numberOfTurns;
         address winner;
+        bool channel;
+        address lastTurn;
     }
     
     mapping(uint => Game) public games;
@@ -135,7 +138,9 @@ contract TicTacToe {
            state: GameStates.Started,
            bidId: id,
            numberOfTurns: 1, 
-           winner: address(0)
+           winner: address(0),
+           channel: false,
+           lastTurn: msg.sender
         });
         games[id] = newGame;
         Game storage currentGame = games[id];
@@ -144,10 +149,70 @@ contract TicTacToe {
         emit Started(id, row, col);
     }
     
+    function play(uint id, uint8 row, uint8 col) public{
+        Game storage currentGame = games[id];
+        require(currentGame.state == GameStates.Started, "You are not allowed to use this function now");
+        
+        require(currentGame.board[row][col] == 0, "You cannot play in an already played box");
+        
+        if (currentGame.lastTurn == currentGame.X) {
+            require(msg.sender == currentGame.O, "Not your turn");
+            currentGame.board[row][col] = -1;
+            currentGame.lastTurn=currentGame.O;
+        } else {
+            require(msg.sender == currentGame.X, "Not your turn");
+            currentGame.board[row][col] = 1;
+            currentGame.lastTurn = currentGame.X;
+        }
+        
+        currentGame.numberOfTurns++;
+        
+        emit Played(id, row, col);
+        
+        if (currentGame.numberOfTurns >= 5) {
+            (bool won, address winner) = checkWinner(currentGame);
+            
+            if (won) {
+                currentGame.winner = winner;
+                currentGame.state = GameStates.Won;
+                
+                Bid storage currentBid = bids[id];
+                currentBid.state = BidStates.Disbursed;
+                
+                ERC20Interface(tokenAddress).transfer(winner, currentBid.value);
+                
+                emit Closed(id, "Game Won", winner);
+            } else if(currentGame.numberOfTurns == 9) {
+                currentGame.state = GameStates.Drew;
+                
+                Bid storage currentBid = bids[id];
+                currentBid.state = BidStates.Disbursed;
+                uint drawRefund = currentBid.value/2;
+                
+                ERC20Interface(tokenAddress).transfer(currentGame.X, drawRefund);
+                ERC20Interface(tokenAddress).transfer(currentGame.O, currentBid.value - drawRefund);
+                
+                emit Closed(id, "Game Draw", address(0));
+                
+            }
+        }
+        
+        
+    }
+    
+    function channelize(uint id) public {
+        Game storage currentGame = games[id];
+        require(msg.sender == currentGame.X || msg.sender == currentGame.O, "Not a player in this game");
+        require(currentGame.state == GameStates.Started, "This game cannot be channelized");
+        
+        currentGame.state = GameStates.Channelized;
+    }
+    
+    
     function save(uint id, int8[9] memory board,  uint8 v, bytes32 r, bytes32 s, uint8 nonce, bool close) public{
         Game storage currentGame = games[id];
         require(currentGame.numberOfTurns >= 1, "Game should start before you can attempt to save");
-        require(currentGame.state == GameStates.Started, "There is nothing to save");
+        require(currentGame.state == GameStates.Channelized, "The channel for this game is not active");
         require(nonce < 10, "invalid nonce");
         require(currentGame.numberOfTurns < nonce, "Trying to save older state");
         require(msg.sender == currentGame.X || msg.sender == currentGame.O, "Not a player in this game");
@@ -180,7 +245,7 @@ contract TicTacToe {
                 currentBid.state = BidStates.Disbursed;
                 
                 ERC20Interface(tokenAddress).transfer(winner, currentBid.value);
-                remove(id);
+                
                 emit Closed(id, "Game Won", winner);
             } else if(currentGame.numberOfTurns == 9) {
                 currentGame.state = GameStates.Drew;
@@ -193,7 +258,7 @@ contract TicTacToe {
                 ERC20Interface(tokenAddress).transfer(currentGame.O, currentBid.value - drawRefund);
                 
                 emit Closed(id, "Game Draw", address(0));
-                remove(id);
+                
             } else {
                 require(false, "Game cannot be closed without a result. If you want to just save send close as false");
             }
@@ -245,9 +310,9 @@ contract TicTacToe {
         return (currentBid.bidder, currentBid.acceptor, currentBid.value, currentBid.state, currentBid.bidTimeOut);
     }
     
-    function getGameDetails(uint id) public view returns(address, address, GameStates, uint8, address){
+    function getGameDetails(uint id) public view returns(address, address, GameStates, uint8, address, address){
         Game memory game = games[id];
-        return (game.X, game.O, game.state, game.numberOfTurns, game.winner);
+        return (game.X, game.O, game.state, game.numberOfTurns, game.winner, game.lastTurn);
     }
     
     function getBoard(uint g) public view returns (int8[9] memory board) {
